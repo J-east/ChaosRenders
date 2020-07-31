@@ -23,16 +23,18 @@ namespace ChaosRenders {
             this.textBox2.Text = "1.8";
             this.textBox3.Text = "-0.9";
             this.textBox4.Text = "-0.4";
-            this.textBox5.Text = ".05";
+            this.textBox5.Text = ".01";
 
             //gr = Graphics.FromImage(bitmap);
         }
 
         // handle equation shift
-        PointF lastPoint = new PointF(0, 0);
-        double a = 7.16878197155893, b = 8.43659746693447, c = 2.55983412731439, d = -0.4;
-        double newa = 7.16878197155893, newb = 8.43659746693447, newc = 2.55983412731439, newd = -0.4;
-        double newDelta = .05;
+        PointF lastPoint = new PointF(1, 1);
+        double a = -1.7, b = 1.8, c = -.9, d = -.4;
+        double newa = -1.7, newb = 1.8, newc = -.9, newd = -.4;
+        double newah = -1.5, newbh = 2, newch = -.8, newdh = -.3;
+        bool aup = false, bup = false, cup = false, dup = false;
+        double newDelta = .01;
         int currPos = 0;
         bool useGumowskiMira = false;
         bool useHopalong = false;
@@ -59,7 +61,7 @@ namespace ChaosRenders {
             }
             else
             {
-                xnew = Math.Sinh(a * y) + c * Math.Cos(a * x);
+                xnew = Math.Sin(a * y) + c * Math.Cos(a * x);
                 ynew = Math.Sin(b * x) + d * Math.Cos(b * y);
             }
 
@@ -67,40 +69,45 @@ namespace ChaosRenders {
             lastPoint = new PointF((float)xnew, (float)ynew);
             points[currPos] = lastPoint;
 
-            if (++currPos > maxCount - 1)
+            if (++currPos > IterationCount - 1)
             {
                 currPos = 0;
             }
 
-            filled = ++filled > maxCount ? maxCount : filled;
+            filled = ++filled > IterationCount ? IterationCount : filled;
         }
 
-        const int maxCount = 100000;
-        static PointF[] points = new PointF[maxCount];
+        int IterationCount = 10000;
+        static PointF[] points = new PointF[100000];
         int filled = 0;
         Bitmap bitmap = new Bitmap(1920, 1200);
         int[] lines = Enumerable.Range(0, 1200).ToArray();
+        int lastDiff = 30;
         private void pictureBox1_Paint(object sender, PaintEventArgs e)
         {
+            filled = 0;
+
+            DateTime startTime = DateTime.UtcNow;
+
             if (dontDraw)
                 return;
 
-            a = a >= newa ? a - newDelta : a;
-            b = b >= newb ? b - newDelta : b;
-            c = c >= newc ? c - newDelta : c;
-            d = d >= newd ? d - newDelta : d;
+            aup = (aup || a < newa) && (a < newah);
+            bup = (bup || b < newb) && (b < newbh);
+            cup = (cup || c < newc) && (c < newch);
+            dup = (dup || d < newd) && (d < newdh);
 
-            a = a < newa ? a + newDelta : a;
-            b = b < newb ? b + newDelta : b;
-            c = c < newc ? c + newDelta : c;
-            d = d < newd ? d + newDelta : d;
+            a = aup ? a + newDelta : a - newDelta;
+            b = bup ? b + newDelta : b - newDelta;
+            c = cup ? c + newDelta : c - newDelta;
+            d = dup ? d + newDelta : d - newDelta;
 
             this.label1.Text = a.ToString("0.###");
             this.label2.Text = b.ToString("0.###");
             this.label3.Text = c.ToString("0.###");
             this.label4.Text = d.ToString("0.###");
 
-            for (int i = 0; i < 100000; i++)
+            for (int i = 0; i < IterationCount; i++)
                 HandleShiftLorenz();
 
             var g = e.Graphics;
@@ -113,18 +120,6 @@ namespace ChaosRenders {
             var width = this.pictureBox1.Width;
             var height = this.pictureBox1.Height;
 
-            //gr.FillRectangle(drbrush, 0, 0, 1920, 1200);
-
-            // draw the points
-            //for (int i = 0; i < filled - 1; i++)
-            //{
-            //    gr.FillRectangle(brush,
-            //        width / 2 + 400 * points[i].X,
-            //        height / 2 + 400 * points[i].Y,
-            //        1,
-            //        1);
-            //}
-
             using (var fastBitmap = bitmap.FastLock())
             {
 
@@ -133,7 +128,9 @@ namespace ChaosRenders {
                     for (int i = 0; i < 1920; i++)
                     {
                         var tempColor = fastBitmap.GetPixel(i, line);
-                        fastBitmap.SetPixel(i, line, Color.FromArgb((tempColor.A - (tempColor.A/30)) < 0 ? 0 : tempColor.A - (tempColor.A / 30), 
+
+                    if (!(tempColor.A == 0))
+                        fastBitmap.SetPixel(i, line, Color.FromArgb((tempColor.A - (tempColor.A/20)) < 20 ? 0 : tempColor.A - (tempColor.A / 20), 
                             (tempColor.R + 20) >255 ? 0 : tempColor.R +20,
                             (tempColor.G + 10) > 200 ? 0 : tempColor.G + 10,
                             (tempColor.B - 10) > 0 ? tempColor.B -10 : 0));
@@ -141,29 +138,71 @@ namespace ChaosRenders {
                 }
                 );
 
-                Parallel.ForEach(points, (point) =>
+                for(int j = 0; j < IterationCount; j++)
                 {
-                    var tempx = (int)(width / 2 + 200* point.X);
-                    var tempy = (int)(height / 2 + 200*point.Y);
+                    var point = points[j];
+                    var tempx = (int)(width / 2 + 300* point.X);
+                    var tempy = (int)(height / 2 + 300*point.Y);
                     if (!(tempx > 0 && tempx < 1920) || !(tempy > 0 && tempy < 1200))
-                        return;
+                        continue;
 
                     var tempColor = fastBitmap.GetPixel(tempx, tempy);
 
                     fastBitmap.SetPixel(tempx, tempy, Color.FromArgb(tempColor.A + 100>255 ? 255:tempColor.A + 100, 50, 50, 255));
                 }
-                );
             }
-
-
+            var startTime1 = DateTime.UtcNow;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
             g.DrawImage(bitmap, 0, 0);
+            lastDiff = (DateTime.UtcNow - startTime1).Milliseconds;
 
             g.DrawString($"points drawn: {filled}", new Font("Arial", 12), brush, 20, 20);
 
             loaded = true;
+
+            lastDiff = (DateTime.UtcNow - startTime).Milliseconds;
+
+            if (lastDiff < 42 && IterationCount < 100000)
+                IterationCount += 10000;
+            else if (lastDiff > 40 && IterationCount > 10000)
+                IterationCount -= 10000;
         }
 
         bool loaded = false;
+
+        private void bHigh_TextChanged(object sender, EventArgs e)
+        {
+            if (!loaded)
+                return;
+            try
+            {
+                this.newbh = double.Parse(bHigh.Text);
+            }
+            catch { }
+        }
+
+        private void cHigh_TextChanged(object sender, EventArgs e)
+        {
+            if (!loaded)
+                return;
+            try
+            {
+                this.newch = double.Parse(cHigh.Text);
+            }
+            catch { }
+        }
+
+        private void dHigh_TextChanged(object sender, EventArgs e)
+        {
+            if (!loaded)
+                return;
+            try
+            {
+                this.newdh = double.Parse(dHigh.Text);
+            }
+            catch { }
+        }
+
         private void textBox1_TextChanged(object sender, EventArgs e)
         {
             if (!loaded)
@@ -182,6 +221,17 @@ namespace ChaosRenders {
             try
             {
                 this.newb = double.Parse(textBox2.Text);
+            }
+            catch { }
+        }
+
+        private void aHigh_TextChanged(object sender, EventArgs e)
+        {
+            if (!loaded)
+                return;
+            try
+            {
+                this.newah = double.Parse(aHigh.Text);
             }
             catch { }
         }
@@ -228,6 +278,8 @@ namespace ChaosRenders {
         bool dontDraw = true;
         private void Form1_Shown(object sender, EventArgs e)
         {
+            this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
             int i = 0;
             while (i++ < 30)
             {
